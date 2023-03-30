@@ -3,12 +3,6 @@
   "tree": {
     "$className": "DataModel",
 
-    "ServerStorage": {
-      "epic": {
-        "$path": "src"
-      }
-    },
-
     "Workspace": {
       "$properties": {
         "FilteringEnabled": true
