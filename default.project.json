@@ -3,6 +3,12 @@
   "tree": {
     "$className": "DataModel",
 
+    "ServerStorage": {
+      "matrixclass": {
+        "$path": "src"
+      }
+    },
+
     "Workspace": {
       "$properties": {
         "FilteringEnabled": true
