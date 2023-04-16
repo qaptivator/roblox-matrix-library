@@ -1,11 +1,6 @@
 --!strict
-local matrixclass = {}
-matrixclass.__index = matrixclass
-type matrix = {{number}}
-
-function matrixclass.new(mat: matrix)
-	return setmetatable(mat, matrixclass)
-end
+local Matrix = {}
+Matrix.__index = Matrix
 
 --[|=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=|]--
 
@@ -17,22 +12,88 @@ end
 
 --[|=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=|]--
 
-local function istable(arg: any)
-	return typeof(arg) == 'table'
+type matrix = {{number}}
+
+--[ Functions ]--
+function Matrix.new(mat: matrix)
+	return setmetatable(mat, Matrix)
 end
 
-local function ismatrix(mat: matrix)
-	return getmetatable(mat).__index == matrixclass
+function Matrix.identity(size: number)
+	local result = {}
+	for i=0, size, 1 do
+		if not result[i] then
+			result[i] = {}
+		end
+		for j=0, size, 1 do
+			if i == j then
+				result[i][j] = 1
+			else
+				result[i][j] = 0
+			end
+		end
+	end
+	return Matrix.new(result)
+end
+
+function Matrix.generate(size: {number}, value: number)
+	local result = {}
+	for i=0, size, 1 do
+		if not result[i] then
+			result[i] = {}
+		end
+		for j=0, size, 1 do
+			result[i][j] = value
+		end
+	end
+	return Matrix.new(result)
+end
+
+function Matrix.fromVector3(vector: Vector3)
+	return Matrix.new({
+		{ vector.X },
+		{ vector.Y },
+		{ vector.Z }
+	})
+end
+
+function Matrix.fromVector2(vector: Vector2)
+	return Matrix.new({
+		{ vector.X },
+		{ vector.Y }
+	})
+end
+
+function Matrix.fromUDim2(udim2: UDim2)
+	return Matrix.new({
+		{ udim2.Height.Scale, udim2.Width.Scale },
+		{ udim2.Height.Offset, udim2.Width.Offset }
+	})
+end
+
+--[ Local Functions ]--
+local function isMatrix(mat: matrix)
+	return getmetatable(mat).__index == Matrix
+end
+
+local function sign(num: number)
+	if num > 0 then
+		return 1
+	elseif num < 0 then
+		return -1
+	else
+		return num
+	end
 end
 
 local function tableEquality(a: {}, b: {})
 	for i,v in next, a do 
-		if b[i]~=v then 
+		if b[i] ~= v then 
 			return false 
 		end 
 	end
 	for i,v in next, b do 
-		if a[i]~=v then 
+		if a[i] ~= v then 
 			return false 
 		end 
 	end
@@ -63,8 +124,8 @@ end
 
 local function size(mat: matrix)
 	local result = {}
-	table.insert(result,#mat)
-	table.insert(result,#mat[1])
+	table.insert(result, #mat)
+	table.insert(result, #mat[1])
 	return result
 end
 
@@ -80,7 +141,7 @@ end
 local function map(mat: matrix, funct: (any, {number}, matrix) -> (any)) -- (element, {row, column}, matrix)
 	local result = {}
 	for i,_ in ipairs(mat) do
-		if istable(mat[i]) then
+		if type(mat[i]) == "table" then
 			result[i] = {}
 			for j,_ in ipairs(mat[i]) do
 				result[i][j] = funct(mat[i][j], {i,j}, mat)
@@ -90,18 +151,6 @@ local function map(mat: matrix, funct: (any, {number}, matrix) -> (any)) -- (ele
 		end
 	end
 	return result
-end
-
-local function rationalize(mat: matrix)
-	return matrixclass.new(map(mat,function(elem)
-		return rational(elem) -- get this from ration.js in the repo
-	end))
-end
-
-local function derationalize(mat: matrix)
-	return matrixclass.new(map(mat,function(elem)
-		return elem.num/elem.den --??
-	end))
 end
 
 local function extractRange(mat: matrix, starts: number, ends: number)
@@ -130,15 +179,18 @@ local function extractRange(mat: matrix, starts: number, ends: number)
 end
 
 local function extract(mat: matrix, args: {})
-	for i,_ in ipairs(mat) do
+	local dim = dimensions(mat)
+	for i = 1, dim, 1 do
 		local d = args[i]
-		if not d then
+
+		if d == nil then
 			break
 		end
-		if istable(d) then
+		
+		if type(d) == "table" then
 			mat = extractRange(mat, d, i)
-		elseif typeof(d) == 'number' then
-			if dimensions(mat) > 1	and i > 1 then
+		elseif type(d) == "number" then
+			if dim > 1 and i > 1 then
 				mat = map(mat, function(elem)
 					return elem[d]
 				end)
@@ -150,29 +202,9 @@ local function extract(mat: matrix, args: {})
 	return mat
 end
 
-local function add(a: matrix, b: matrix)
-	if tableEquality(size(a), size(b)) then
-		return matrixclass.new(map(a, function(elem, ind)
-			return elem+b[ind[1]][ind[2]]
-		end))
-	else
-		return error("Input matrices should be the same size")
-	end
-end
-
-local function sub(a: matrix, b: matrix)
-	if tableEquality(size(a), size(b)) then
-		return matrixclass.new(map(a, function(elem, ind)
-			return elem-b[ind[1]][ind[2]]
-		end))
-	else
-		return error("Input matrices should be the same size")
-	end
-end
-
-local function mul(a: matrix, b: matrix)
-	local size1 = size(a)
-	local size2 = size(b)
+local function multiplyMatrices(matrixA: matrix, matrixB: matrix)
+	local size1 = size(matrixA)
+	local size2 = size(matrixB)
 	local result = {}
 	if size1[2] == size2[1] then
 		for i=1, size1[1], 1 do
@@ -182,23 +214,20 @@ local function mul(a: matrix, b: matrix)
 					if not result[i][j] then
 						result[i][j] = 0
 					end
-					result[i][j] += a[i][k]*b[k][j]
+					result[i][j] += matrixA[i][k]*matrixB[k][j]
 				end
 			end
 		end
 	end
-	return matrixclass.new(result)
+
+	return Matrix.new(result)
 end
 
-local function mulnum(a: matrix | number, b: matrix | number)
-	local mat = matrixclass.new({})
-	local num = 0
-	if typeof(a) == "number" and typeof(b) ~= "number" then
-		mat, num = b, a
-	else
-		mat, num = a, b
-	end
-	return matrixclass.new(map(mat, function(elem)
+local function multiplyMatrixWithNumber(matrixA: matrix | number, matrixB: matrix | number)
+	local mat = Matrix.new( if type(matrixB) == "number" then matrixA else matrixB )
+	local num = if type(matrixA) == "number" then matrixA else matrixB
+
+	return Matrix.new(map(mat, function(elem)
 		return elem*num
 	end))
 end
@@ -208,113 +237,110 @@ local function transpose(mat: matrix)
 	local output = {}
 	for i=1, s[1], 1 do
 		for j=1, s[2], 1 do
-			if istable(output[j]) then
+			if type(output[j]) == "table" then
 				table.insert(output[j], mat[i][j])
 			else
-				output[j] = {mat[i][j]}
+				output[j] = { mat[i][j] }
 			end
 		end
 	end
-	return matrixclass.new(output)
+	return Matrix.new(output)
 end
 
-function matrixclass:size()
+-- [ Rational ] --
+
+-- coming soon
+
+--[ Methods ]--
+
+function Matrix:size()
 	return size(self)
 end
 
-function matrixclass:map(funct)
+function Matrix:map(funct)
 	return map(self, funct)
 end
 
-function matrixclass:add(arg)
-	return add(self,arg)
-end
-
-function matrixclass:sub(arg)
-	return sub(self,arg)
-end
-
-function matrixclass:mul(arg: matrix | number)
-	if typeof(self) ~= "number" and typeof(arg) ~= "number" then
-		return mul(self,arg)
+function Matrix:add(matrixB: matrix)
+	print(matrixB)
+	if tableEquality(size(self), size(matrixB)) then
+		return Matrix.new(map(self, function(elem, ind)
+			return elem + matrixB[ind[1]][ind[2]]
+		end))
 	else
-		return mulnum(self,arg)
+		return error("Input matrices should be the same size")
 	end
-end	
-
-function matrixclass:transpose()
-	return transpose(self)
 end
 
-function matrixclass:populate(value: number)
-	return matrixclass.new(map(self, function(elem)
+function Matrix:subtract(matrixB: matrix)
+	if tableEquality(size(self), size(b)) then
+		return Matrix.new(map(self, function(elem, ind)
+			return elem - matrixB[ind[1]][ind[2]]
+		end))
+	else
+		return error("Input matrices should be the same size")
+	end
+end
+
+function Matrix:multiply(mat: matrix | number)
+	if type(self) ~= "number" and type(mat) ~= "number" then
+		return multiplyMatrices(self, mat)
+	else
+		return multiplyMatrixWithNumber(self, mat)
+	end
+end
+
+function Matrix:exponentMatrix(power: number)
+	if power == 0 then
+		return 1
+	elseif power % 2 == 0 then -- power is even
+		return Matrix.exponentMatrix(self * self, power / 2)
+	else -- power is odd
+		return self * Matrix.exponentMatrix(self * self, (power - 1) / 2)
+	end
+end
+
+function Matrix:populate(value: number)
+	return Matrix.new(map(self, function(elem)
 		elem = value
 		return elem
 	end))
 end
 
-function matrixclass.identity(size: number)
-	local result = {}
-	for i=0, size, 1 do
-		if not result[i] then
-			result[i] = {}
-		end
-		for j=0, size, 1 do
-			if i == j then
-				result[i][j] = 1
-			else
-				result[i][j] = 0
-			end
-		end
-	end
-	return matrixclass.new(result)
-end
-
-function matrixclass.generate(size: {number}, value: number)
-	local result = {}
-	for i=0, size, 1 do
-		if not result[i] then
-			result[i] = {}
-		end
-		for j=0, size, 1 do
-			result[i][j] = value
-		end
-	end
-	return matrixclass.new(result)
-end
-
-function matrixclass:equals(mat: matrix)
+function Matrix:equals(mat: matrix)
 	return matrixEquality(self, mat)
 end
 
-function matrixclass:stringify()
+function Matrix:stringify()
 	local result = {}
 	for _,v in ipairs(self) do
 		table.insert(result,"\n	")
 		for _,el in pairs(v) do
 			table.insert(result,el)
 		end
-	end
+	end	
 	return table.concat(result," ")
 end
 
-matrixclass.__call = function(mat: matrix, args: number | {})
-	if not args then
+Matrix.transpose = transpose
+
+--[ Metamethods ]--
+Matrix.__call = function(mat: matrix, x: number | {}, y: number | {})
+	if not x or not y then
 		return mat
 	else
-		return extract(mat, args)
+		return extract(mat, {x, y})
 	end
 end
 
---matrixclass.__tostring = function(t)
-	--local result = {}
-	--for _,v in ipairs(t) do
-		--table.insert(result,"\n	")
-		--for _,el in pairs(v) do
-			--table.insert(result,el)
-		--end
-	--end
-	--return table.concat(result," ")
---end
+Matrix.__eq = matrixEquality
 
-return matrixclass
+Matrix.__add = Matrix.add
+
+Matrix.__sub = Matrix.subtract
+
+Matrix.__mul = Matrix.multiply
+
+Matrix.__pow = Matrix.exponentMatrix
+
+return Matrix

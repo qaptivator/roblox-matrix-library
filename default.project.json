@@ -4,7 +4,7 @@
     "$className": "DataModel",
 
     "ServerStorage": {
-      "matrixclass": {
+      "Matrix": {
         "$path": "src"
       }
     },
