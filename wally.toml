@@ -1,5 +1,6 @@
 [package]
-name = "andrew/roblox-matrix-library"
+name = "qaptivator/roblox-matrix-library"
+description = "Roblox Library to perform basic matrix operations"
 version = "0.1.0"
 registry = "https://github.com/UpliftGames/wally-index"
 realm = "shared"
